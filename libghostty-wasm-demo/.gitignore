@@ -1,0 +1,6 @@
+dist/
+ghostty-src/
+node_modules/
+vr-baseline/
+vr-output/
+package-lock.json

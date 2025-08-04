@@ -1,0 +1,47 @@
+name: visual-regression
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: 1.0.14
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('libghostty-wasm-demo/bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - uses: actions/cache@v4
+        with:
+          path: libghostty-wasm-demo/vr-baseline
+          key: ${{ runner.os }}-vr-baseline
+          restore-keys: ${{ runner.os }}-vr-baseline
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright
+          restore-keys: ${{ runner.os }}-playwright
+      - run: bun install --frozen-lockfile
+        working-directory: libghostty-wasm-demo
+      - run: bunx playwright install --with-deps webkit
+        working-directory: libghostty-wasm-demo
+      - run: ./build.sh
+        working-directory: libghostty-wasm-demo
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libghostty-wasm
+          path: libghostty-wasm-demo/dist/libghostty.wasm
+      - run: bun visual-test.js
+        working-directory: libghostty-wasm-demo
+      - name: upload outputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vr-output
+          path: libghostty-wasm-demo/vr-output

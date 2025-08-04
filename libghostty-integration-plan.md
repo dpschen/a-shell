@@ -3,15 +3,15 @@
 ## MVP Outside a-Shell
 
 ### Phase 1 – Barebones WASM Demo
-- [ ] Build libGhostty for WebAssembly
-  - [ ] Obtain libGhostty source
-  - [ ] Compile with Zig: `zig build -Dtarget=wasm32-wasi -Drelease-small`
-- [ ] Minimal HTML/JS loader
-  - [ ] Create `index.html` that loads `ghostty.js`
-  - [ ] `ghostty.js` fetches and instantiates `libghostty.wasm`
-- [ ] Hard-coded rendering loop
-  - [ ] Call a draw function in `requestAnimationFrame`
-  - [ ] Render a "hello world" buffer without user input
+- [x] Build libGhostty for WebAssembly
+  - [x] Obtain libGhostty source
+  - [x] Compile with Zig: `zig build -Dtarget=wasm32-wasi -Drelease-small`
+- [x] Minimal HTML/JS loader
+  - [x] Create `index.html` that loads `ghostty.js`
+  - [x] `ghostty.js` fetches and instantiates `libghostty.wasm`
+- [x] Hard-coded rendering loop
+  - [x] Call a draw function in `requestAnimationFrame`
+  - [x] Render a "hello world" buffer without user input
 
 ### Phase 2 – Basic Interactivity
 - [ ] Keyboard input wiring

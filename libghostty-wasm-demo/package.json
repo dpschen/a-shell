@@ -1,0 +1,14 @@
+{
+  "name": "libghostty-wasm-demo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "bun visual-test.js"
+  },
+  "devDependencies": {
+    "pixelmatch": "7.1.0",
+    "playwright": "1.54.2",
+    "sharp": "0.34.3"
+  }
+}
