@@ -12,21 +12,17 @@ jobs:
       - uses: oven-sh/setup-bun@v1
         with:
           bun-version: 1.2.14
+          cache: bun
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
       - uses: actions/cache@v4
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('libghostty-wasm-demo/bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
-      - uses: actions/cache@v4
-        with:
-          path: libghostty-wasm-demo/vr-baseline
-          key: ${{ runner.os }}-vr-baseline
-          restore-keys: ${{ runner.os }}-vr-baseline
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright
-          restore-keys: ${{ runner.os }}-playwright
+          path: |
+            ~/.cache/ms-playwright
+            libghostty-wasm-demo/vr-baseline
+          key: ${{ runner.os }}-vr-playwright-${{ hashFiles('libghostty-wasm-demo/bun.lock') }}
+          restore-keys: ${{ runner.os }}-vr-playwright-
       - run: bun install --frozen-lockfile
         working-directory: libghostty-wasm-demo
       - run: bunx playwright install --with-deps webkit
