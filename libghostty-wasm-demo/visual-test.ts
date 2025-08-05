@@ -13,7 +13,6 @@ const outDir = path.join(demoDir, 'vr-output');
 const baselineImg = path.join(baselineDir, 'canvas.webp');
 const currentPng = path.join(outDir, 'current.png');
 const currentWebp = path.join(outDir, 'current.webp');
-const diffWebp = path.join(outDir, 'diff.webp');
 
 await fs.promises.mkdir(baselineDir, { recursive: true });
 await fs.promises.mkdir(outDir, { recursive: true });
@@ -21,7 +20,7 @@ await fs.promises.mkdir(outDir, { recursive: true });
 const browser = await webkit.launch();
 const page = await browser.newPage();
 await page.goto('file://' + path.join(demoDir, 'index.html'));
-await page.waitForTimeout(100);
+await page.evaluate(() => new Promise(requestAnimationFrame));
 await page.screenshot({ path: currentPng });
 await browser.close();
 
@@ -37,9 +36,7 @@ if (!fs.existsSync(baselineImg)) {
 const base = await sharp(baselineImg).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
 const curr = await sharp(currentWebp).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
 const { width, height } = base.info;
-const diff = Buffer.alloc(base.data.length);
-const diffPixels = pixelmatch(base.data, curr.data, diff, width, height, { threshold: 0.1 });
-await sharp(diff, { raw: { width, height, channels: 4 } }).webp({ lossless: true }).toFile(diffWebp);
+const diffPixels = pixelmatch(base.data, curr.data, undefined, width, height, { threshold: 0.1 });
 
 if (diffPixels > 0) {
   console.error(`Visual diff found: ${diffPixels} pixels differ`);
