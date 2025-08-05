@@ -47,6 +47,7 @@
 - [ ] Re-implement clipboard, context menu, drag-and-drop, and URL handling
 
 ### Phase 6 – Testing, Optimization & Documentation
+- [ ] Run visual regression on macOS GitHub runner
 - [ ] Run functional, performance, and cross-browser tests
 - [ ] Verify accessibility (screen readers, keyboard navigation)
 - [ ] Document build steps, user docs, and deployment process

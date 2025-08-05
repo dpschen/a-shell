@@ -6,7 +6,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v1
@@ -19,13 +19,13 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
             libghostty-wasm-demo/vr-baseline
           key: ${{ runner.os }}-vr-playwright-${{ hashFiles('libghostty-wasm-demo/bun.lock') }}
           restore-keys: ${{ runner.os }}-vr-playwright-
       - run: bun install --frozen-lockfile
         working-directory: libghostty-wasm-demo
-      - run: bunx playwright install --with-deps webkit
+      - run: bunx playwright install webkit
         working-directory: libghostty-wasm-demo
       - run: ./build.sh
         working-directory: libghostty-wasm-demo
