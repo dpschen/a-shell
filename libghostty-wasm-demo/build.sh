@@ -1,9 +1,12 @@
 #!/bin/sh
-set -e
+set -eu
 
 # Build the WASM demo and its browser assets
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT_DIR="$SCRIPT_DIR/dist"
+
+command -v zig >/dev/null 2>&1 || { echo "zig required" >&2; exit 1; }
+command -v bun >/dev/null 2>&1 || { echo "bun required" >&2; exit 1; }
 
 mkdir -p "$OUT_DIR"
 
