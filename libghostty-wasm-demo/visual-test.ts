@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// Visual regression test for the libGhostty WASM demo
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

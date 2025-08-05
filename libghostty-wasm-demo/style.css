@@ -1,0 +1,11 @@
+/* Minimal styling for the libGhostty demo */
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: monospace;
+}
+#screen {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

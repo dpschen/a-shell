@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "bun visual-test.js"
+    "test": "bun visual-test.ts"
   },
   "devDependencies": {
     "pixelmatch": "7.1.0",

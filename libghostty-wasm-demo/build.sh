@@ -1,14 +1,19 @@
 #!/bin/sh
 set -e
 
-# Resolve the directory of this script and the output folder
+# Build the WASM demo and its browser assets
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT_DIR="$SCRIPT_DIR/dist"
 
-# Build the WASM module into dist/libghostty.wasm
 mkdir -p "$OUT_DIR"
+
+# Compile Zig source to WebAssembly
 zig build-lib "$SCRIPT_DIR/hello.zig" \
   -target wasm32-wasi \
   -O ReleaseSmall \
   -femit-bin="$OUT_DIR/libghostty.wasm"
 
+# Transpile the TypeScript frontend for Safari
+bun build "$SCRIPT_DIR/ghostty.ts" \
+  --outfile "$OUT_DIR/ghostty.js" \
+  --target browser
