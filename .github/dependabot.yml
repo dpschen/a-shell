@@ -8,3 +8,10 @@ updates:
     directory: "/libghostty-wasm-demo"
     schedule:
       interval: "weekly"
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "deps"
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
