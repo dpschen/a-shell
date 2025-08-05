@@ -33,7 +33,7 @@ jobs:
         with:
           name: libghostty-wasm
           path: libghostty-wasm-demo/dist/libghostty.wasm
-      - run: bun visual-test.js
+      - run: bun visual-test.ts
         working-directory: libghostty-wasm-demo
       - name: upload outputs
         if: failure()

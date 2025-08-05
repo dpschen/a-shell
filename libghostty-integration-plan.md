@@ -14,14 +14,14 @@
   - [x] Render a "hello world" buffer without user input
 
 ### Phase 2 – Basic Interactivity
-- [ ] Keyboard input wiring
-  - [ ] Add `keydown` event listeners translating to `Ghostty.onKey`
-- [ ] Shell output simulation
-  - [ ] Implement `write()` wrapper echoing key presses
-- [ ] Resize handling
-  - [ ] Update terminal dimensions when the window size changes
-- [ ] Minimal styling
-  - [ ] Apply basic CSS for canvas sizing and font
+- [x] Keyboard input wiring
+  - [x] Add `keydown` event listeners translating to `Ghostty.onKey`
+- [x] Shell output simulation
+  - [x] Implement `write()` wrapper echoing key presses
+- [x] Resize handling
+  - [x] Update terminal dimensions when the window size changes
+- [x] Minimal styling
+  - [x] Apply basic CSS for canvas sizing and font
 
 ## a-Shell Integration Phases
 

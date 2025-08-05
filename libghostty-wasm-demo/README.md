@@ -4,13 +4,8 @@ This directory hosts a tiny experiment loading a libGhostty WebAssembly module.
 
 ## Build
 
-Requires Zig 0.13.0.
-Run `./build.sh` to compile the Zig source.
-The resulting `libghostty.wasm` is written to `dist/`.
-Open `index.html` in a browser to see the rendered text.
+Requires Zig 0.13.0 and Bun. Run `./build.sh` to compile the Zig source and bundle the TypeScript frontend. Outputs land in `dist/`. Open `index.html` in Safari to interact; typed keys echo to the canvas and the display resizes with the window.
 
 ## Visual test
 
-`bun visual-test.js` launches WebKit headlessly and captures the canvas.
-The first run writes a lossless WebP baseline under `vr-baseline/`.
-Later runs compare against it and place results in `vr-output/`.
+`bun visual-test.ts` launches WebKit headlessly and captures the canvas. The first run writes a lossless WebP baseline under `vr-baseline/`. Later runs compare against it and place results in `vr-output/`.
