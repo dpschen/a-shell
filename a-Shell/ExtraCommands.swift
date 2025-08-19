@@ -241,7 +241,12 @@ bashmarks-style bookmarks inspired by bashmarks: https://github.com/huyng/bashma
 public func pickFolder(argc: Int32, argv: UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>?) -> Int32 {
     if let delegate = currentDelegate {
         delegate.resignFirstResponder()
-        delegate.pickFolder()
+        let sem = DispatchSemaphore(value: 0)
+        // Wait for the document picker callback instead of spinning on a flag.
+        delegate.pickFolder { _ in
+            sem.signal()
+        }
+        sem.wait()
     }
     return 0
 }
@@ -359,10 +364,15 @@ public func config(argc: Int32, argv: UnsafeMutablePointer<UnsafeMutablePointer<
                 }
             }
             if (name == "picker") {
-                if let newName = delegate?.pickFont() {
-                    terminalFontName = newName
-                    // NSLog("Name received: \(terminalFontName)")
+                let sem = DispatchSemaphore(value: 0)
+                // Block until the user selects a font through the picker.
+                delegate?.pickFont { newName in
+                    if let newName = newName {
+                        terminalFontName = newName
+                    }
+                    sem.signal()
                 }
+                sem.wait()
             } else if name == "default" {
                 if let storedName = UserDefaults.standard.object(forKey: "fontName") as? String {
                     terminalFontName = storedName
@@ -1088,10 +1098,15 @@ func downloadRemoteFileFromCloud(fileURL: URL) {
     let downloadedFilePath = folderPath + "/" + lastPathComponent.replacingOccurrences(of: ".icloud", with: "")
     do {
         NSLog("Started downloading file \(downloadedFilePath) from iCloud")
-        try FileManager().startDownloadingUbiquitousItem(at: URL(fileURLWithPath: downloadedFilePath))
-        let startingTime = Date()
-        // try downloading the file for 5s, then give up:
-        while (!FileManager().fileExists(atPath: fileURL.path) && (Date().timeIntervalSince(startingTime) < 5)) { }
+        let localURL = URL(fileURLWithPath: downloadedFilePath)
+        try FileManager().startDownloadingUbiquitousItem(at: localURL)
+        let coordinator = NSFileCoordinator()
+        var coordError: NSError?
+        // Coordinate a read to block until the system finishes downloading the file.
+        coordinator.coordinate(readingItemAt: localURL, options: [], error: &coordError) { _ in }
+        if let error = coordError {
+            NSLog("Could not coordinate download for \(downloadedFilePath): \(error)")
+        }
     }
     catch {
         NSLog("Could not download file \(downloadedFilePath) from iCloud")
@@ -1176,30 +1191,32 @@ func downloadFilesFromRemoteFolder(fileURL: URL) {
 }
 
 public func downloadRemoteFile(fileURL: URL) -> Bool {
-    if (FileManager().fileExists(atPath: fileURL.path)) {
-        if (fileURL.isDirectory) {
+    // Use NSFileCoordinator to wait for the download to finish instead of busy-waiting.
+    if FileManager().fileExists(atPath: fileURL.path) {
+        if fileURL.isDirectory {
             downloadFilesFromRemoteFolder(fileURL: fileURL)
         }
         return true
     }
     NSLog("Try downloading file from iCloud: \(fileURL)")
     do {
-        // this will work with iCloud, but not Dropbox or Microsoft OneDrive, who have a specific API.
+        // This will work with iCloud, but not Dropbox or Microsoft OneDrive, who have a specific API.
         // TODO: find out how to authorize a-Shell for Dropbox, OneDrive, GoogleDrive.
         try FileManager().startDownloadingUbiquitousItem(at: fileURL)
-        let startingTime = Date()
-        // try downloading the file for 5s, then give up:
-        while (!FileManager().fileExists(atPath: fileURL.path) && (Date().timeIntervalSince(startingTime) < 5)) { }
-        // TODO: add an alert, ask if user wants to continue
-        // NSLog("Done downloading, new status: \(FileManager().fileExists(atPath: fileURL.path))")
-        if (FileManager().fileExists(atPath: fileURL.path)) {
-            if (fileURL.isDirectory) {
+        let coordinator = NSFileCoordinator()
+        var coordError: NSError?
+        coordinator.coordinate(readingItemAt: fileURL, options: [], error: &coordError) { _ in }
+        if let error = coordError {
+            NSLog("Could not coordinate download for \(fileURL): \(error)")
+            return false
+        }
+        if FileManager().fileExists(atPath: fileURL.path) {
+            if fileURL.isDirectory {
                 downloadFilesFromRemoteFolder(fileURL: fileURL)
             }
             return true
         }
-    }
-    catch {
+    } catch {
         NSLog("Could not download file from iCloud")
         // print(error)
     }
@@ -1713,25 +1730,24 @@ public func storeInteractive() -> Int32 {
     if (runningInExtension) {
         return 0
     }
-    var returnValue:Int32 = -1;
-    var waitingForAnswer = true
+    var returnValue:Int32 = -1
+    let sem = DispatchSemaphore(value: 0)
+    // Wait for JavaScript to report the interactive command result.
     DispatchQueue.main.async {
         if let delegate = currentDelegate {
             delegate.resignFirstResponder()
             delegate.webView?.evaluateJavaScript("window.interactiveCommandRunning;") { (result, error) in
-                // if let error = error { print(error); }
-                if let result = result as? Int32 { returnValue = result; }
-                waitingForAnswer = false
+                if let result = result as? Int32 { returnValue = result }
+                sem.signal()
             }
+        } else {
+            sem.signal()
         }
     }
-    // We need to place something in this loop, otherwise it gets removed by the optimizer.
-    while (waitingForAnswer) {
-        if (thread_stdout != nil) { fflush(thread_stdout) }
-        if (thread_stderr != nil) { fflush(thread_stderr) }
-    }
-    // NSLog("Returning from storeInteractive, result= \(returnValue)")
-    return returnValue;
+    sem.wait()
+    if (thread_stdout != nil) { fflush(thread_stdout) }
+    if (thread_stderr != nil) { fflush(thread_stderr) }
+    return returnValue
 }
 
 @_cdecl("startInteractive")

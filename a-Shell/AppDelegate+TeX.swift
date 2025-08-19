@@ -15,6 +15,7 @@ private let texmf_dist_fontsResource = NSBundleResourceRequest(tags: ["texlive_d
 private let texmf_dist_fonts_vfResource = NSBundleResourceRequest(tags: ["texlive_texmf_dist_fonts_vf"])
 private let texmf_dist_fonts_type1Resource = NSBundleResourceRequest(tags: ["texlive_texmf_dist_fonts_type1"])
 private let texmf_dist_fonts_opentypeResource = NSBundleResourceRequest(tags: ["texlive_texmf_dist_fonts_otf_ttf"])
+private var opentypeProgressObserver: NSKeyValueObservation?
 
 extension AppDelegate {
 
@@ -81,6 +82,7 @@ extension AppDelegate {
     }
     
     override func observeValue(forKeyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        // Progress callbacks update the aggregate percent complete.
         let texmf_dist_fonts_type1Size = 354116.0
         let texmf_dist_fontsSize = 344776.0
         let texmf_dist_fonts_vf_Size = 255004.0
@@ -530,26 +532,24 @@ extension AppDelegate {
                 return
             } else {
                 self.debuggingTeXInstall(message: "texmf-dist/fonts OpenType resource succesfully downloaded")
-                // link the sub-directories in the right place:
                 self.copyContentFromResource(resource: texmf_dist_fonts_opentypeResource, path: "texlive_2023_texmf_dist_fonts_otf_ttf")
                 self.debuggingTeXInstall(message: "Done copying texmf-dist/fonts OpenType resource")
-                // Release the resource:
                 texmf_dist_fonts_opentypeResource.endAccessingResources()
             }
         })
-        moveFilesQueue.async{
-            // In a queue, so as not to block the rest of the program.
-            // Now, we wait until the resource is downloaded.
-            while (texmf_dist_fonts_opentypeResource.progress.fractionCompleted < 1.0) {
-                percentOpentypeDownloadComplete = texmf_dist_fonts_opentypeResource.progress.fractionCompleted
+        // Observe progress rather than polling fractionCompleted in a loop.
+        opentypeProgressObserver = texmf_dist_fonts_opentypeResource.progress.observe(\.fractionCompleted) { progress, _ in
+            percentOpentypeDownloadComplete = progress.fractionCompleted
+            if progress.fractionCompleted >= 1.0 {
+                self.debuggingTeXInstall(message: "Opentype fonts have been downloaded.")
+                downloadingOpentype = false
+                self.OpentypeEnabled = true
+                if (self.TeXEnabled) {
+                    addCommandList(Bundle.main.path(forResource: "luatexCommandsDictionary", ofType: "plist"))
+                }
+                UserDefaults.standard.setValue("2024", forKey: "LuaTeXVersion")
+                opentypeProgressObserver = nil
             }
-            self.debuggingTeXInstall(message: "Opentype fonts have been downloaded.")
-            downloadingOpentype = false
-            self.OpentypeEnabled = true
-            if (self.TeXEnabled) {
-                addCommandList(Bundle.main.path(forResource: "luatexCommandsDictionary", ofType: "plist"))
-            }
-            UserDefaults.standard.setValue("2024", forKey: "LuaTeXVersion")
         }
     }
 

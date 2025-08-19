@@ -18,6 +18,9 @@
 // libdot/js/lib_storage_memory.js
 // libdot/js/lib_storage_terminal_private.js
 // libdot/third_party/intl-segmenter/intl-segmenter.js
+//
+// Note: a-Shell applies local patches to this generated output. Look for
+// inline comments marked with 'Binary search...' etc. when debugging.
 // libdot/third_party/wcwidth/lib_wc.js
 // hterm/js/hterm.js
 // hterm/js/hterm_accessibility_reader.js
@@ -4522,11 +4525,18 @@ lib.Storage.TerminalPrivate.prototype.removeItems = async function(keys) {
           ++this._cur;
         }
       } else {
-        // TODO: binary search
-        for (this._cur = 0;
-             this._cur < this._breaks.length
-             && this._breaks[this._cur].pos < index;
-             ++this._cur) { /* TODO */ }
+        // Search break positions with binary search instead of a linear scan.
+        let lo = 0;
+        let hi = this._breaks.length;
+        while (lo < hi) {
+          const mid = Math.floor((lo + hi) / 2);
+          if (this._breaks[mid].pos < index) {
+            lo = mid + 1;
+          } else {
+            hi = mid;
+          }
+        }
+        this._cur = lo;
       }
 
       this._type = this._cur < this._breaks.length
@@ -4546,11 +4556,18 @@ lib.Storage.TerminalPrivate.prototype.removeItems = async function(keys) {
           --this._cur;
         }
       } else {
-        // TODO: binary search
-        for (this._cur = this._breaks.length - 1;
-             this._cur >= 0
-             && this._breaks[this._cur].pos >= index;
-             --this._cur) { /* TODO */ }
+        // Binary search for the previous break before |index|.
+        let lo = 0;
+        let hi = this._breaks.length;
+        while (lo < hi) {
+          const mid = Math.floor((lo + hi) / 2);
+          if (this._breaks[mid].pos >= index) {
+            hi = mid;
+          } else {
+            lo = mid + 1;
+          }
+        }
+        this._cur = lo - 1;
       }
 
       this._type =
