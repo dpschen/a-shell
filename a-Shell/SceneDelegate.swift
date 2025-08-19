@@ -57,6 +57,7 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
     var width = 80
     var height = 80
     var stdout_active = false
+    var stdoutSemaphore = DispatchSemaphore(value: 0)
     var stdout_button_active = false
     var persistentIdentifier: String? = nil
     var stdin_file: UnsafeMutablePointer<FILE>? = nil
@@ -89,6 +90,8 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
     var pid: pid_t = 0
     private var selectedDirectory = ""
     private var selectedFont = ""
+    private var directoryPickerCompletion: ((String) -> Void)? = nil
+    private var fontPickerCompletion: ((String?) -> Void)? = nil
     // Store these for session restore:
     var currentDirectory = ""
     var previousDirectory = ""
@@ -115,6 +118,7 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
     var rightButtonGroups: [UIBarButtonItemGroup] = []
     let maxSubmenuLevels = 15
     var buttonRegex: [Int:String] = [:]
+    var buttonRegexToTag: [String:Int] = [:]
     var noneTag = -1
     var bufferedOutput: String? = nil
     var fontPicker = UIFontPickerViewController()
@@ -829,6 +833,7 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
                 leftButtonGroups = []
                 rightButtonGroups = []
                 buttonRegex = [:]
+                buttonRegexToTag = [:]
                 var maximumTag = 0
                 var insideSubmenu = false
                 var submenuLevel = 0
@@ -875,22 +880,16 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
                                 commandRegex.removeFirst()
                                 commandRegex.removeLast()
                             }
-                            var foundRegexBefore = false
-                            for (key, value) in buttonRegex {
-                                if value == commandRegex {
-                                    activeTag = key
-                                    foundRegexBefore = true
-                                    break
-                                }
-                            }
-                            if (!foundRegexBefore) {
+                            if let existing = buttonRegexToTag[commandRegex] {
+                                activeTag = existing
+                            } else {
                                 activeTag = maximumTag + 1
                                 maximumTag = activeTag
-                                // NSLog("Storing: \(commandRegex) for tag: \(activeTag)")
                                 if (commandRegex == "none") {
                                     noneTag = activeTag
                                 }
                                 buttonRegex[activeTag] = commandRegex
+                                buttonRegexToTag[commandRegex] = activeTag
                             }
                         }
                         continue
@@ -1578,6 +1577,7 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
             return
         }
         javascriptRunning = true
+        let jsSemaphore = DispatchSemaphore(value: 0)
         do {
             var fileContent = try String(contentsOf: URL(fileURLWithPath: fileName), encoding: String.Encoding.utf8)
             if (fileContent.hasPrefix("#!")) {
@@ -1618,6 +1618,8 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
                             }
                         }
                         self.javascriptRunning = false
+                        jsSemaphore.signal()
+                        jsSemaphore.signal()
                     }
                     catch {
                         // Extract information about *where* the error is, etc.
@@ -1641,6 +1643,7 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
                         }
                         fflush(self.thread_stderr_copy)
                         self.javascriptRunning = false
+                        jsSemaphore.signal()
                     }
                 }
             } else {
@@ -1696,11 +1699,11 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
         catch {
             fputs("Error executing JavaScript file: " + command + ": \(error) \n", thread_stderr)
             javascriptRunning = false
+            jsSemaphore.signal()
         }
-        while (javascriptRunning) {
-            if (thread_stdout != nil && stdout_active) { fflush(thread_stdout) }
-            if (thread_stderr != nil && stdout_active) { fflush(thread_stderr) }
-        }
+        jsSemaphore.wait()
+        if (thread_stdout != nil) { fflush(thread_stdout) }
+        if (thread_stderr != nil) { fflush(thread_stderr) }
         thread_stdin_copy = nil
         thread_stdout_copy = nil
         thread_stderr_copy = nil
@@ -1920,90 +1923,79 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
     }
     
     // Creates the iOS 13 Font picker, returns the name of the font selected.
-    func pickFont() -> String? {
-        DispatchQueue.main.sync {
+    func pickFont(completion: @escaping (String?) -> Void) {
+        DispatchQueue.main.async {
             let fontPickerConfig = UIFontPickerViewController.Configuration()
             fontPickerConfig.includeFaces = true
             fontPickerConfig.filteredTraits = .traitMonoSpace
-            // Create the font picker
-            fontPicker = UIFontPickerViewController(configuration: fontPickerConfig)
-            fontPicker.delegate = self
-            // Present the font picker
+            self.fontPicker = UIFontPickerViewController(configuration: fontPickerConfig)
+            self.fontPicker.delegate = self
             self.selectedFont = ""
-            // Main issue: the user can dismiss the fontPicker by sliding upwards.
-            // So we need to check if it was, indeed dismissed:
+            self.fontPickerCompletion = completion
             let rootVC = self.window?.rootViewController
-            rootVC?.present(fontPicker, animated: true, completion: nil)
+            rootVC?.present(self.fontPicker, animated: true, completion: nil)
         }
-        // Wait until fontPicker is dismissed or a font has been selected:
-        while (!self.fontPicker.isBeingDismissed) && (self.selectedFont == "") { }
-        DispatchQueue.main.async {
-            self.fontPicker.dismiss(animated:true)
-        }
-        if (selectedFont != "cancel") && (selectedFont != "") {
-            return selectedFont
-        }
-        return nil
     }
     
     func fontPickerViewControllerDidCancel(_ viewController: UIFontPickerViewController) {
         // User cancelled the font picker delegate
-        // NSLog("Cancelled font")
         selectedFont = "cancel"
+        fontPicker.dismiss(animated: true)
+        fontPickerCompletion?(nil)
+        fontPickerCompletion = nil
     }
     
     
     func fontPickerViewControllerDidPickFont(_ viewController: UIFontPickerViewController) {
-        // We got a font!
         if let descriptor = viewController.selectedFontDescriptor {
             if let name = descriptor.fontAttributes[.family] as? String {
-                // NSLog("Selected font: \(name)")
-                // "Regular" variants of the font:
                 selectedFont = name
-                return
             } else if let name = descriptor.fontAttributes[.name] as? String {
-                // This is for Light, Medium, ExtraLight variants of the font:
-                // NSLog("Selected font: \(name)")
                 selectedFont = name
-                return
             }
+        } else {
+            selectedFont = "cancel"
         }
-        selectedFont = "cancel"
+        fontPicker.dismiss(animated: true)
+        let result = (selectedFont != "cancel" && selectedFont != "") ? selectedFont : nil
+        fontPickerCompletion?(result)
+        fontPickerCompletion = nil
     }
     
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
         selectedDirectory = "cancelled"
+        // Notify callers that the user dismissed the picker without selecting.
+        directoryPickerCompletion?(selectedDirectory)
+        directoryPickerCompletion = nil
     }
     
-    func pickFolder() {
+    func pickFolder(completion: @escaping (String) -> Void) {
         // https://developer.apple.com/documentation/uikit/view_controllers/providing_access_to_directories
         documentPicker.allowsMultipleSelection = true
         documentPicker.delegate = self
-        
+        // Use a completion handler so callers can wait without polling.
+        directoryPickerCompletion = completion
+
         let rootVC = self.window?.rootViewController
-        // Set the initial directory (it doesn't work, so it's commented)
         // documentPicker.directoryURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        // Present the document picker.
         selectedDirectory = ""
         DispatchQueue.main.async {
             rootVC?.present(self.documentPicker, animated: true, completion: nil)
         }
-        while (selectedDirectory == "") { } // wait until a directory is selected, for Shortcuts.
     }
-    
-    func pickFile() {
+
+    func pickFile(completion: @escaping (String) -> Void) {
         documentPicker.allowsMultipleSelection = false
         documentPicker.delegate = self
-        
+        // Signal the selected file through the completion handler.
+        directoryPickerCompletion = completion
+
         let rootVC = self.window?.rootViewController
-        // Set the initial directory (it doesn't work, so it's commented)
         // documentPicker.directoryURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        // Present the document picker.
         selectedDirectory = ""
         DispatchQueue.main.async {
             rootVC?.present(self.documentPicker, animated: true, completion: nil)
         }
-        while (selectedDirectory == "") { } // wait until a directory is selected, for Shortcuts.
     }
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         // Present the Document View Controller for the first document that was picked.
@@ -2045,6 +2037,8 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
             }
         }
         selectedDirectory = newDirectory.path
+        directoryPickerCompletion?(selectedDirectory)
+        directoryPickerCompletion = nil
     }
     
     func play_media(arguments: [String]?) -> Int32 {
@@ -2269,9 +2263,8 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
                 // only store command if different from last command
                 history.append(command)
             }
-            while (history.count > 100) {
-                // only keep the last 100 commands
-                history.removeFirst()
+            if (history.count > 100) {
+                history.removeFirst(history.count - 100) // Trim excess entries in one pass
             }
         }
         // Can't create/close windows through ios_system, because it creates/closes a new session.
@@ -2331,6 +2324,7 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
             // Call the following functions when data is written to stdout/stderr.
             stdout_pipe.fileHandleForReading.readabilityHandler = self.onStdout
             self.stdout_active = true
+            self.stdoutSemaphore = DispatchSemaphore(value: 0)
             // Make sure we're on the right session:
             ios_switchSession(self.persistentIdentifier?.toCString())
             ios_setContext(UnsafeMutableRawPointer(mutating: self.persistentIdentifier?.toCString()));
@@ -2443,9 +2437,9 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
             if (writeOpen >= 0) {
                 // Pipe is still open, send information to close it, once all output has been processed.
                 stdout_pipe.fileHandleForWriting.write(self.endOfTransmission.data(using: .utf8)!)
-                while (self.stdout_active) {
-                    fflush(thread_stdout)
-                }
+                self.stdoutSemaphore.wait()
+                if (thread_stdout != nil) { fflush(thread_stdout) }
+                if (thread_stderr != nil) { fflush(thread_stderr) }
             }
             // Experimental: If it works, try removing the 4 lines above
             do {
@@ -4596,6 +4590,7 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
             outputToWebView(string: string)
             if (string.contains(endOfTransmission)) {
                 stdout_active = false
+                stdoutSemaphore.signal()
             }
         } else if let string = String(data: data, encoding: String.Encoding.ascii) {
             // NSLog("Couldn't convert data in stdout using UTF-8, resorting to ASCII: \(string)")
@@ -4603,6 +4598,7 @@ class SceneDelegate: UIViewController, UIWindowSceneDelegate, WKNavigationDelega
             outputToWebView(string: string)
             if (string.contains(endOfTransmission)) {
                 stdout_active = false
+                stdoutSemaphore.signal()
             }
         } else {
             // NSLog("Couldn't convert data in stdout: \(data)")
